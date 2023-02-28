@@ -1,0 +1,54 @@
+# More examples of Codefresh YAML can be found at
+# https://codefresh.io/docs/docs/yaml-examples/examples/
+
+version: "1.0"
+# Stages can help you organize your steps in stages
+stages:
+  - "clone"
+  - "check"
+  - "upload"
+
+steps:
+  clone:
+    title: "Cloning repository"
+    type: "git-clone"
+    repo: "kostis-codefresh/codefresh-docs-links"
+    revision: "main"
+    stage: "clone"
+  check_links:
+    title: "Check Links"
+    type: "freestyle" # Run any command
+    image: "ghcr.io/linkchecker/linkchecker:latest" # The image in which command will be executed
+    working_directory: "${{clone}}" # Running command where code cloned
+    fail_fast: false
+    commands:
+      - cd /tmp
+      - "linkchecker https://codefresh.io/docs/ -Fhtml || true"
+      - pwd
+      - cd /tmp
+      - ls
+      - cp linkchecker-out.html /codefresh/volume/index.html
+    stage: "check"
+  prepare_commit:
+    title: Prepare report
+    stage: upload
+    image: 'codefresh/cli'
+    working_directory: ${{clone}}
+    commands:
+      - cf_export GITHUB_TOKEN=$(codefresh get context github-1 --decrypt -o yaml | yq -y .spec.data.auth.password)
+      - mkdir -p /codefresh/volume/codefresh-docs-links/docs
+      - cp /codefresh/volume/index.html /codefresh/volume/codefresh-docs-links/docs
+  commit_report:
+    title: Upload report
+    stage: upload
+    image: 'alpine/git'
+    working_directory: ${{clone}}
+    commands:
+      - git config --global user.email "kostis@codefresh.io"
+      - git config --global user.name "Kostis Kapelonis" 
+      - cd docs
+      - git add .
+      - git status
+      - git commit -m "Automatic linkchecker run"
+      - git push "https://kostis-codefresh:$GITHUB_TOKEN@github.com/kostis-codefresh/codefresh-docs-links" main 
+      - echo "Report is ready at https://kostis-codefresh.github.io/codefresh-docs-links/"      
