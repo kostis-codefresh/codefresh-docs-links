@@ -1,0 +1,33 @@
+name: Generate Docs Links report
+
+on:
+  schedule:
+    # Run every 2 hours, but not on Saturdays
+    - cron: "0 */2 * * 0-5"
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  generate-report:
+    name: Generate Report
+    runs-on: ubuntu-latest
+
+    permissions:
+      # Give the default GITHUB_TOKEN write permission to commit and push the
+      # generated report back to the repository.
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run linkchecker
+        # linkchecker exits non-zero when it finds broken links; `|| true`
+        # keeps the workflow green. The HTML report is written to stdout
+        # (-o html) and redirected into the Pages-published docs folder.
+        run: |
+          docker run --rm ghcr.io/linkchecker/linkchecker:latest \
+            -o html https://codefresh.io/docs/ > docs/index.html || true
+
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: Automatic CI report
+          file_pattern: docs/index.html
